@@ -426,13 +426,29 @@ bool HardwareInterface::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw
   safety_mode_pub_.reset(
       new realtime_tools::RealtimePublisher<ur_dashboard_msgs::SafetyMode>(robot_hw_nh, "safety_mode", 1, true));
 
+  std::vector<std::string> input_recipe_list = ur_driver_->getRTDEInputRecipe();
+
   // Set the speed slider fraction used by the robot's execution. Values should be between 0 and 1.
   // Only set this smaller than 1 if you are using the scaled controllers (as by default) or you know what you're
   // doing. Using this with other controllers might lead to unexpected behaviors.
-  set_speed_slider_srv_ = robot_hw_nh.advertiseService("set_speed_slider", &HardwareInterface::setSpeedSlider, this);
+  if (std::find(input_recipe_list.begin(), input_recipe_list.end(), "speed_slider_fraction") != input_recipe_list.end())
+  {
+    set_speed_slider_srv_ = robot_hw_nh.advertiseService("set_speed_slider", &HardwareInterface::setSpeedSlider, this);
+  }
+  else
+  {
+    ROS_WARN("'set_speed_slider' service was not set because there was no 'speed_slider_fraction' entry in the input recipe.");
+  }
 
   // Service to set any of the robot's IOs
-  set_io_srv_ = robot_hw_nh.advertiseService("set_io", &HardwareInterface::setIO, this);
+  if (std::find(input_recipe_list.begin(), input_recipe_list.end(), "output") != input_recipe_list.end())
+  {
+    set_io_srv_ = robot_hw_nh.advertiseService("set_io", &HardwareInterface::setIO, this);
+  }
+  else
+  {
+    ROS_WARN("'set_io' service was not set because there was no '*output*' entry in the input recipe.");
+  }
 
   if (headless_mode)
   {
@@ -1079,7 +1095,7 @@ bool HardwareInterface::setSpeedSlider(ur_msgs::SetSpeedSliderFractionRequest& r
 {
   if (req.speed_slider_fraction >= 0.01 && req.speed_slider_fraction <= 1.0 && ur_driver_ != nullptr)
   {
-    res.success = true; // ur_driver_->getRTDEWriter().sendSpeedSlider(req.speed_slider_fraction);
+    res.success = ur_driver_->getRTDEWriter().sendSpeedSlider(req.speed_slider_fraction);
   }
   else
   {
@@ -1094,20 +1110,20 @@ bool HardwareInterface::setIO(ur_msgs::SetIORequest& req, ur_msgs::SetIOResponse
   {
     if (req.pin <= 7)
     {
-      res.success = true; // ur_driver_->getRTDEWriter().sendStandardDigitalOutput(req.pin, req.state);
+      res.success = ur_driver_->getRTDEWriter().sendStandardDigitalOutput(req.pin, req.state);
     }
     else if (req.pin <= 15)
     {
-      res.success = true; // ur_driver_->getRTDEWriter().sendConfigurableDigitalOutput(req.pin - 8, req.state);
+      res.success = ur_driver_->getRTDEWriter().sendConfigurableDigitalOutput(req.pin - 8, req.state);
     }
     else
     {
-      res.success = true; // ur_driver_->getRTDEWriter().sendToolDigitalOutput(req.pin - 16, req.state);
+      res.success = ur_driver_->getRTDEWriter().sendToolDigitalOutput(req.pin - 16, req.state);
     }
   }
   else if (req.fun == req.FUN_SET_ANALOG_OUT && ur_driver_ != nullptr)
   {
-    res.success = true; // ur_driver_->getRTDEWriter().sendStandardAnalogOutput(req.pin, req.state);
+    res.success = ur_driver_->getRTDEWriter().sendStandardAnalogOutput(req.pin, req.state);
   }
   else if (req.fun == req.FUN_SET_TOOL_VOLTAGE && ur_driver_ != nullptr)
   {
